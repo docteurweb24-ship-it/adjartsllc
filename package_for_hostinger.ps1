@@ -37,7 +37,13 @@ if ($IncludeEnv) {
     if (-not (Test-Path .env)) {
         if (Test-Path .env.example) {
             Copy-Item .env.example .env
-            Write-Host ".env créé depuis .env.example — éditez .env avec vos valeurs de production avant le téléversement." -ForegroundColor Green
+            Write-Host ".env créé depuis .env.example — modification minimale appliquée: DB_CONNECTION=mysql, DB_HOST=localhost" -ForegroundColor Green
+            # ensure DB_CONNECTION is mysql and DB_HOST is localhost in the created .env
+            (Get-Content .env) |
+              ForEach-Object {
+                $_ -replace '^DB_CONNECTION=.*', 'DB_CONNECTION=mysql' -replace '^DB_HOST=.*', 'DB_HOST=127.0.0.1'
+              } | Set-Content .env
+            Write-Host "IMPORTANT: éditez .env et remplissez DB_DATABASE, DB_USERNAME, DB_PASSWORD et APP_URL avant upload." -ForegroundColor Yellow
         } else {
             Write-Host ".env.example introuvable. Créez un .env manuellement." -ForegroundColor Red
         }
@@ -81,17 +87,36 @@ if (Test-Path $zipName) { Remove-Item $zipName -Force }
 
 Write-Host "Creating ZIP archive: $zipName (this may take a while)..." -ForegroundColor Cyan
 
-# Files and folders to exclude
-$exclude = @('.git', '.github', 'node_modules', 'tests', '.vscode')
+# Files and folders to exclude (relative names)
+$exclude = @('.git', '.github', 'node_modules', 'tests', '.vscode', 'dataconnect/example', 'src/dataconnect-generated')
 
-# Build list of items to include
-$items = Get-ChildItem -Force | Where-Object { $exclude -notcontains $_.Name }
+# Create ZIP by adding files that are NOT excluded
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+$zipPath = Join-Path (Get-Location) $zipName
+if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
 
-# Use System.IO.Compression to create zip (works on Windows)
-[Reflection.Assembly]::LoadWithPartialName('System.IO.Compression.FileSystem') | Out-Null
-[System.IO.Compression.ZipFile]::CreateFromDirectory($(Get-Location).Path, $zipName)
+$files = Get-ChildItem -Recurse -File -Force | Where-Object {
+    $full = $_.FullName.Replace('\', '/')
+    $skip = $false
+    foreach ($e in $exclude) {
+        $pattern = ('/' + $e.Trim('/') + '/')
+        if ($full -like "*${pattern}*" -or $full -like "*${e}") { $skip = $true; break }
+    }
+    return -not $skip
+}
 
-Write-Host "Archive $zipName créée. Vérifiez son contenu puis téléversez-la sur Hostinger via FTP ou File Manager." -ForegroundColor Green
+[System.IO.Compression.ZipFile]::Open($zipPath, [System.IO.Compression.ZipArchiveMode]::Create).Dispose()
+$zip = [System.IO.Compression.ZipFile]::Open($zipPath, [System.IO.Compression.ZipArchiveMode]::Update)
+foreach ($f in $files) {
+    $entryName = $f.FullName.Substring((Get-Location).Path.Length).TrimStart('\','/') -replace '\\','/'
+    # If entry already exists, delete then add
+    $existing = $zip.Entries | Where-Object { $_.FullName -eq $entryName }
+    if ($existing) { $existing.Delete() }
+    $zip.CreateEntryFromFile($f.FullName, $entryName) | Out-Null
+}
+$zip.Dispose()
+
+Write-Host "Archive $zipName créée (${files.Count} fichiers inclus). Vérifiez son contenu puis téléversez-la sur Hostinger via FTP ou File Manager." -ForegroundColor Green
 
 Write-Host "Rappels post-upload :" -ForegroundColor Magenta
 Write-Host " - Placez le contenu du dossier 'public' dans le dossier public_html (ou configurez DocumentRoot vers /public)." -ForegroundColor Magenta
