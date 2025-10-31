@@ -105,18 +105,27 @@ $files = Get-ChildItem -Recurse -File -Force | Where-Object {
     return -not $skip
 }
 
-[System.IO.Compression.ZipFile]::Open($zipPath, [System.IO.Compression.ZipArchiveMode]::Create).Dispose()
-$zip = [System.IO.Compression.ZipFile]::Open($zipPath, [System.IO.Compression.ZipArchiveMode]::Update)
-foreach ($f in $files) {
-    $entryName = $f.FullName.Substring((Get-Location).Path.Length).TrimStart('\','/') -replace '\\','/'
-    # If entry already exists, delete then add
-    $existing = $zip.Entries | Where-Object { $_.FullName -eq $entryName }
-    if ($existing) { $existing.Delete() }
-    $zip.CreateEntryFromFile($f.FullName, $entryName) | Out-Null
-}
-$zip.Dispose()
+try {
+    # Fallback to PowerShell Compress-Archive for robustness: copy included files to a temp dir preserving structure, then compress.
+    $tempDir = Join-Path $env:TEMP ("hostinger_package_{0}" -f ([System.Guid]::NewGuid().ToString()))
+    New-Item -ItemType Directory -Force -Path $tempDir | Out-Null
 
-Write-Host "Archive $zipName créée (${files.Count} fichiers inclus). Vérifiez son contenu puis téléversez-la sur Hostinger via FTP ou File Manager." -ForegroundColor Green
+    foreach ($f in $files) {
+        $entryName = $f.FullName.Substring((Get-Location).Path.Length).TrimStart('\','/') -replace '\\','/'
+        $destPath = Join-Path $tempDir $entryName
+        $destDir = Split-Path $destPath -Parent
+        if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Force -Path $destDir | Out-Null }
+        Copy-Item -Path $f.FullName -Destination $destPath -Force
+    }
+
+    Compress-Archive -Path (Join-Path $tempDir '*') -DestinationPath $zipPath -Force
+    Remove-Item -Recurse -Force $tempDir
+
+    Write-Host "Archive $zipName créée (${files.Count} fichiers inclus). Vérifiez son contenu puis téléversez-la sur Hostinger via FTP ou File Manager." -ForegroundColor Green
+} catch {
+    Write-Host "Erreur lors de la création de l'archive : $_" -ForegroundColor Red
+    exit 1
+}
 
 Write-Host "Rappels post-upload :" -ForegroundColor Magenta
 Write-Host " - Placez le contenu du dossier 'public' dans le dossier public_html (ou configurez DocumentRoot vers /public)." -ForegroundColor Magenta
