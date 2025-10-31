@@ -1,0 +1,56 @@
+// Gestionnaire de thème universel
+class UniversalThemeManager {
+    constructor(prefix = '') {
+        this.prefix = prefix;
+        this.theme = localStorage.getItem(`${prefix}theme`) || 'dark';
+        this.init();
+    }
+    
+    init() {
+        this.setTheme(this.theme);
+        this.bindEvents();
+    }
+    
+    setTheme(theme) {
+        this.theme = theme;
+        document.body.setAttribute('data-theme', theme);
+        localStorage.setItem(`${this.prefix}theme`, theme);
+        
+        // Mettre à jour les boutons
+        document.querySelectorAll('.theme-btn').forEach(btn => {
+            if (btn.closest('.theme-switcher')) {
+                btn.classList.toggle('active', btn.dataset.theme === theme);
+            }
+        });
+    }
+    
+    bindEvents() {
+        document.querySelectorAll('.theme-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                this.setTheme(btn.dataset.theme);
+            });
+        });
+    }
+    
+    toggle() {
+        this.setTheme(this.theme === 'dark' ? 'light' : 'dark');
+    }
+}
+
+// Initialiser selon le contexte
+if (document.querySelector('.admin-container')) {
+    // Mode admin
+    new UniversalThemeManager('admin-');
+} else {
+    // Mode public
+    new UniversalThemeManager();
+}
+
+// Raccourci clavier (Alt+T pour basculer)
+document.addEventListener('keydown', (e) => {
+    if (e.altKey && e.key === 't') {
+        e.preventDefault();
+        const manager = new UniversalThemeManager();
+        manager.toggle();
+    }
+});
