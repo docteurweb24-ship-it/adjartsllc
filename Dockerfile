@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
     libxml2-dev \
     zip \
     curl \
-    && docker-php-ext-install pdo pdo_mysql zip
+    && docker-php-ext-install pdo pdo_mysql zip bcmath
 
 # Install Composer
 RUN php -r "copy('https://getcomposer.org/installer', 'composer-setup.php');" \
