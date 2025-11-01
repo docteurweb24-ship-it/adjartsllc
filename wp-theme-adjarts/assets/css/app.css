@@ -1,0 +1,6 @@
+/* Minimal placeholder copied from Laravel app.css (Tailwind directives removed for theme). */
+body { font-family: Arial, sans-serif; margin:0; padding:0; color:#222; }
+.site-header { background:#f8f8f8; padding:16px; }
+.site-nav { margin-top:8px; }
+.site-footer { background:#f1f1f1; padding:12px; text-align:center; }
+.entry-content { max-width:900px; margin:20px auto; padding:0 16px; }
